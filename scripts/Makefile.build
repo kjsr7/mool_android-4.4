@@ -158,6 +158,9 @@ cmd_cc_i_c       = $(CPP) $(c_flags)   -o $@ $<
 $(obj)/%.i: $(src)/%.c FORCE
 	$(call if_changed_dep,cc_i_c)
 
+$(obj)/%.s: $(src)/%.cc FORCE
+       $(call if_changed_dep,cxx_s_c)
+
 # These mirror gensymtypes_S and co below, keep them in synch.
 cmd_gensymtypes_c =                                                         \
     $(CPP) -D__GENKSYMS__ $(c_flags) $< |                                   \
@@ -188,9 +191,12 @@ $(obj)/%.ll: $(src)/%.c FORCE
 # (See cmd_cc_o_c + relevant part of rule_cc_o_c)
 
 quiet_cmd_cc_o_c = CC $(quiet_modtag)  $@
+quiet_cmd_cxx_o_cc = CC $(quiet_modtag)  $@
+
 
 ifndef CONFIG_MODVERSIONS
 cmd_cc_o_c = $(CC) $(c_flags) -c -o $@ $<
+cmd_cxx_o_cc = $(CXX) $(cxx_flags) -c -o $@ $<
 
 else
 # When module versioning is enabled the following steps are executed:
@@ -218,6 +224,23 @@ cmd_modversions_c =								\
 	else									\
 		mv -f $(@D)/.tmp_$(@F) $@;					\
 	fi;
+
+cmd_cxx_o_cc = $(CXX) $(cxx_flags) -c -o $(@D)/.tmp_$(@F) $<
+
+cmd_modversions =                                                              \
+       if $(OBJDUMP) -h $(@D)/.tmp_$(@F) | grep -q __ksymtab; then             \
+               $(CPP) -D__GENKSYMS__ $(c_flags) $<                     \
+               | $(GENKSYMS) $(if $(KBUILD_SYMTYPES),                  \
+                                       -T $(@D)/$(@F:.o=.symtypes)) -a $(ARCH)   \
+                > $(@D)/.tmp_$(@F:.o=.ver);                             \
+                                                                        \
+                $(LD) $(LDFLAGS) -r -o $@ $(@D)/.tmp_$(@F)              \
+                        -T $(@D)/.tmp_$(@F:.o=.ver);                    \
+                rm -f $(@D)/.tmp_$(@F) $(@D)/.tmp_$(@F:.o=.ver);        \
+        else                                                            \
+                mv -f $(@D)/.tmp_$(@F) $@;                              \
+        fi;
+
 endif
 
 ifdef CONFIG_FTRACE_MCOUNT_RECORD
@@ -263,6 +286,16 @@ define rule_cc_o_c
 	mv -f $(dot-target).tmp $(dot-target).cmd
 endef
 
+define rule_cxx_o_cc
+        $(call echo-cmd,checksrc) $(cmd_checksrc)                       \
+        $(call echo-cmd,cxx_o_cc) $(cmd_cxx_o_cc);                      \
+        $(cmd_modversions)                                              \
+        scripts/basic/fixdep $(depfile) $@ '$(cmd_cxx_o_cc)' >          \
+        $(dot-target).tmp;  \
+        rm -f $(depfile);                                               \
+        mv -f $(dot-target).tmp $(dot-target).cmd
+endef
+
 define rule_as_o_S
        $(call echo-cmd,as_o_S) $(cmd_as_o_S);                            \
        scripts/basic/fixdep $(depfile) $@ '$(call make-cmd,as_o_S)' >    \
@@ -277,6 +310,10 @@ $(obj)/%.o: $(src)/%.c $(recordmcount_source) FORCE
 	$(call cmd,force_checksrc)
 	$(call if_changed_rule,cc_o_c)
 
+$(obj)/%.o: $(src)/%.cc $(recordmcount_source) $(objtool_dep) FORCE
+	$(call cmd,force_checksrc)
+	$(call if_changed_rule,cxx_o_cc)	
+
 # Single-part modules are special since we need to mark them in $(MODVERDIR)
 
 $(single-used-m): $(obj)/%.o: $(src)/%.c $(recordmcount_source) FORCE
@@ -288,6 +325,13 @@ quiet_cmd_cc_lst_c = MKLST   $@
       cmd_cc_lst_c = $(CC) $(c_flags) -g -c -o $*.o $< && \
 		     $(CONFIG_SHELL) $(srctree)/scripts/makelst $*.o \
 				     System.map $(OBJDUMP) > $@
+
+quiet_cmd_cxx_lst_cc = MKLST   $@
+       cmd_cxx_lst_cc = $(CXX) $(cxx_flags) -g -c -o $*.o $< && \
+       $(CONFIG_SHELL) $(srctree)/scripts/makelst $*.o \
+       System.map $(OBJDUMP) > $@
+$(obj)/%.lst: $(src)/%.cc FORCE
+	$(call if_changed_dep,cxx_lst_cc)
 
 $(obj)/%.lst: $(src)/%.c FORCE
 	$(call if_changed_dep,cc_lst_c)
@@ -314,7 +358,7 @@ $(real-objs-m:.o=.s): modkern_aflags := $(KBUILD_AFLAGS_MODULE) $(AFLAGS_MODULE)
 cmd_gensymtypes_S =                                                         \
     (echo "\#include <linux/kernel.h>" ;                                    \
      echo "\#include <asm/asm-prototypes.h>" ;                              \
-    $(CPP) $(a_flags) $< |                                                  \
+   $(CPP) $(a_flags) $< |                                                  \
       grep "\<___EXPORT_SYMBOL\>" |                                          \
       sed 's/.*___EXPORT_SYMBOL[[:space:]]*\([a-zA-Z0-9_]*\)[[:space:]]*,.*/EXPORT_SYMBOL(\1);/' ) | \
     $(CPP) -D__GENKSYMS__ $(c_flags) -xc - |                                \
@@ -462,7 +506,10 @@ quiet_cmd_link_multi-y = LD      $@
 cmd_link_multi-y = $(LD) $(ld_flags) -r -o $@ $(link_multi_deps) $(cmd_secanalysis)
 
 quiet_cmd_link_multi-m = LD [M]  $@
-cmd_link_multi-m = $(cmd_link_multi-y)
+#cmd_link_multi-m = $(cmd_link_multi-y)
+
+cmd_link_multi-m =  $(LD) $(ld_flags) $(LDFLAGS_MODULE) -o $@ \
+       $(crtbeginM.o) $(link_multi_deps) $(crtendM.o)  
 
 $(multi-used-y): FORCE
 	$(call if_changed,link_multi-y)

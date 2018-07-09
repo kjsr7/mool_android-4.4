@@ -257,6 +257,7 @@ void __might_fault(const char *file, int line);
 static inline void might_fault(void) { }
 #endif
 
+extern int init_test(void);
 extern struct atomic_notifier_head panic_notifier_list;
 extern long (*panic_blink)(int state);
 __printf(1, 2)
