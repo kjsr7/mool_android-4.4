@@ -1,6 +1,4 @@
 
-This is the MOOL (Minimalistic Object Oriented Linux, that aims at redesigning the existing Linux kernel with a minimal set of core OO components) 
-variant for android kernel version 4.4. This kernel has been successfully compiled for Pixel 2 XL API 28 - x86 emulator. But caused to boot loop problem
-which is being verified by researchers at IIT Madras. This project was done under the esteemed guidance of Dr. Dharanipragada Janakiram and Pradeepkumar Gayam.
+This is the MOOL (Minimalistic Object Oriented Linux, that aims at redesigning the existing Linux kernel with a minimal set of core OO components) variant for android kernel version 4.4. This kernel has been successfully compiled for Pixel 2 XL API 28 - x86 emulator. But caused to boot loop problem which is being verified by researchers at IIT Madras. This project was done under the esteemed guidance of Dr. Dharanipragada Janakiram and Pradeepkumar Gayam.
 
 For more details visit http://dos.iitm.ac.in/
